@@ -418,7 +418,7 @@ async function loadBrent() {
   try {
 
     const url =
-      `https://api.twelvedata.com/time_series?symbol=BRENT&interval=1day&outputsize=5000&apikey=${TWELVEDATA_API_KEY}`;
+      `https://api.twelvedata.com/time_series?symbol=XBR/USD&interval=1day&outputsize=5000&apikey=${TWELVEDATA_API_KEY}`;
 
     const response = await fetch(url);
     const data = await response.json();
