@@ -239,7 +239,6 @@ const DATA = {"events":[{"id":0,"date":"2026-04-07","desc":"President Trump post
    Get a free EIA key in 30 seconds: https://www.eia.gov/opendata/register.php
    Get a free Twelve Data key (for Dow): https://twelvedata.com/pricing (Basic/free tier)
    Paste them below before publishing. Without keys, charts show embedded/historical data only. */
-const EIA_API_KEY = "c9d3qc05b62I3F79l7RUKtqSbXCvSWYBxUXpFmfu";
 const TWELVEDATA_API_KEY = "bb2e11ec9c3f417fb60963b94b019c29";
 /* =============================================== */
 
@@ -404,59 +403,119 @@ async function loadDow(){
 
 /* ---------- Live: Brent via EIA ---------- */
 let brentByDate = new Map();
-async function loadBrent(){
-  const dot = document.getElementById('brentDot');
-  if(!EIA_API_KEY || EIA_API_KEY.startsWith('YOUR_')){
-    document.getElementById('brentValue').textContent = 'no key';
-    document.getElementById('brentAsOf').textContent = 'add EIA_API_KEY in script to enable';
-    dot.classList.add('stale');
-    brentChart.data.labels = ['Add EIA key to load'];
-    brentChart.data.datasets[0].data = [];
-    brentChart.update();
-    renderMarketChips();
+
+async function loadBrent() {
+
+  const dot = document.getElementById("brentDot");
+
+  if (!TWELVEDATA_API_KEY) {
+    document.getElementById("brentValue").textContent = "no key";
+    document.getElementById("brentAsOf").textContent = "add Twelve Data key";
+    dot.classList.add("stale");
     return;
   }
-  try{
-    const url = `https://api.eia.gov/v2/petroleum/pri/spt/data/?api_key=${EIA_API_KEY}&frequency=daily&data[0]=value&facets[series][]=RBRTE&sort[0][column]=period&sort[0][direction]=asc&start=2026-02-20&length=5000`;
-    const r = await fetch(url);
-    const j = await r.json();
-    const rows = (j.response && j.response.data) || [];
-    if(rows.length){
-      const dates = rows.map(x=>x.period);
-      const vals = rows.map(x=>parseFloat(x.value));
-      dates.forEach((dt,i)=> brentByDate.set(dt, vals[i]));
-      const labels = dates.map(fmtDate);
-      const markers = buildMarkers(dates, vals, DATA.events);
-      brentChart.data.labels = labels;
-      brentChart.data.datasets[0].data = vals;
-      brentChart.data.datasets[1].data = markers.pointData;
-      brentChart.data.datasets[1].backgroundColor = markers.pointColors;
-      brentChart.data.datasets[1].pointBackgroundColor = markers.pointColors;
-      brentChart.data.datasets[1].pointRadius = markers.pointRadii;
-      brentChart.data.datasets[1].pointHoverRadius = markers.pointRadii.map(r=>r?r+2:0);
-      brentChart.options.onClick = (evt, elements)=>{
-        if(!elements.length) return;
-        const el = elements.find(e=>e.datasetIndex===1) || elements[0];
-        if(el.datasetIndex!==1) return;
-        const evs = markers.byIndex.get(el.index);
-        if(evs) flashEvent(evs[0].id);
-      };
-      brentChart.update();
-      const lastRow = rows[rows.length-1];
-      document.getElementById('brentValue').textContent = '$' + parseFloat(lastRow.value).toFixed(2);
-      document.getElementById('brentAsOf').textContent = 'live · ' + fmtDate(lastRow.period) + ' (EIA)';
-      dot.classList.add('live');
-    }
-  }catch(e){
-    console.warn('Brent live fetch failed', e);
-    document.getElementById('brentValue').textContent = 'unavailable';
-    document.getElementById('brentAsOf').textContent = 'check EIA key / network';
-    dot.classList.add('stale');
-  }
-  renderMarketChips();
-}
-loadDow(); loadBrent();
 
+  try {
+
+    const url =
+      `https://api.twelvedata.com/time_series?symbol=BRENT&interval=1day&outputsize=5000&apikey=${TWELVEDATA_API_KEY}`;
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status === "error") {
+      throw new Error(data.message);
+    }
+
+    const rows = data.values.reverse();
+
+    brentByDate.clear();
+
+    const dates = [];
+    const vals = [];
+
+    rows.forEach(r => {
+
+      const d = r.datetime.substring(0,10);
+
+      const v = parseFloat(r.close);
+
+      if (!isNaN(v)) {
+        dates.push(d);
+        vals.push(v);
+        brentByDate.set(d,v);
+      }
+
+    });
+
+    const labels = dates.map(fmtDate);
+
+    const markers = buildMarkers(dates, vals, DATA.events);
+
+    brentChart.data.labels = labels;
+
+    brentChart.data.datasets[0].data = vals;
+
+    brentChart.data.datasets[1].data = markers.pointData;
+
+    brentChart.data.datasets[1].backgroundColor = markers.pointColors;
+
+    brentChart.data.datasets[1].pointBackgroundColor = markers.pointColors;
+
+    brentChart.data.datasets[1].pointRadius = markers.pointRadii;
+
+    brentChart.data.datasets[1].pointHoverRadius =
+      markers.pointRadii.map(r => r ? r + 2 : 0);
+
+    brentChart.options.onClick = (evt,elements)=>{
+
+      if(!elements.length) return;
+
+      const el = elements.find(e=>e.datasetIndex===1) || elements[0];
+
+      if(el.datasetIndex!==1) return;
+
+      const evs = markers.byIndex.get(el.index);
+
+      if(evs) flashEvent(evs[0].id);
+
+    };
+
+    brentChart.update();
+
+    const latest = rows[rows.length-1];
+
+    document.getElementById("brentValue").textContent =
+      "$" + Number(latest.close).toFixed(2);
+
+    document.getElementById("brentAsOf").textContent =
+      "live · " + fmtDate(latest.datetime.substring(0,10)) + " (Twelve Data)";
+
+    dot.classList.remove("stale");
+    dot.classList.add("live");
+
+  }
+
+  catch(err){
+
+    console.error(err);
+
+    document.getElementById("brentValue").textContent = "unavailable";
+
+    document.getElementById("brentAsOf").textContent =
+      "Twelve Data error";
+
+    dot.classList.remove("live");
+    dot.classList.add("stale");
+
+  }
+
+  renderMarketChips();
+
+}
+
+loadDow();
+loadBrent();
 /* ---------- Timeline rendering ---------- */
 function tagHTML(coercion, action, src, purpose){
   let out = '';
